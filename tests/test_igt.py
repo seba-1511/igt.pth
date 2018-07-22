@@ -58,6 +58,7 @@ if __name__ == '__main__':
 
     H = V(T([[2, 0], [0, 1]]))
     for i in range(3):
+        opt.train()
         opt.zero_grad()
         loss = 0.5 * th.mm(model().t(),
                            th.mm(H, model()))

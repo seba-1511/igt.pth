@@ -6,3 +6,4 @@ all:
 
 test:
 	python tests/test_igt.py
+	python tests/test_heavyball_igt.py

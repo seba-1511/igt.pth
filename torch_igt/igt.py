@@ -12,18 +12,35 @@ class MomentumIGT(Optimizer):
 
     Arguments:
 
+        * params -- parameters to optimize
+        * lr=required -- learning rate
+        * momentum=0.0 -- momentum factor
+        * dampening=0.0 -- momentum dampening factor
+        * weight_decay=0.0 -- weight decay factor
+        * nesterov=False -- wheter to use nesterov or not
+        * delta=1.0 -- IGT's delta displacement parameter
+
     Example:
 
+        # Training
+        opt = MomentumIGT(model.parameters(), lr=0.1, momentum=0.9)
+        opt.train() # Optional if opt.eval() is never used
+        error = loss(model(X), y)
+        error.backward()
+        opt.step()
+
+        # Evaluation
+        model.eval()
+        opt.eval()
+        error = loss(model(X), y)
+
     Notes:
-        
+
         * This implementation requires 5 copies of the model's parameters.
           (igt_velocity, momentum_velocity, true_params, gradients, params)
           I think it's possible to have a version with only 4 copies,
           but it would sacrifice some clarity.
         * Heavyball and Nesterov are implemented as in PyTorch's SGD.
-
-    TODO:
-        * Write a hand-derived unit-test.
     """
 
     def __init__(self, params, lr=required, momentum=0.0, dampening=0.0,
@@ -32,13 +49,11 @@ class MomentumIGT(Optimizer):
         Arguments:
         """
         if weight_decay < 0.0:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+            msg = "Invalid weight_decay value: {}".format(weight_decay)
+            raise ValueError(msg)
 
         if delta <= 0.0:
-            raise ValueError("Invalid delta value: {}".format(weight_decay))
-
-        if dampening != 0.0:
-            raise ValueError("Dampening is not currently supported.")
+            raise ValueError("Invalid delta value: {}".format(delta))
 
         defaults = dict(lr=lr, momentum=momentum, dampening=dampening,
                         weight_decay=weight_decay, nesterov=nesterov)
@@ -157,7 +172,6 @@ class MomentumIGT(Optimizer):
             group['num_steps'] = num_steps + 1
         return loss
 
-
     def train(self):
         """
         Swaps true and transported parameters.
@@ -167,8 +181,6 @@ class MomentumIGT(Optimizer):
         for group in self.param_groups:
             lr = group['lr']
             momentum = group['momentum']
-            dampening = group['dampening']
-            weight_decay = group['weight_decay']
             nesterov = group['nesterov']
             delta = group['delta']
             num_steps = group['num_steps']
@@ -177,7 +189,7 @@ class MomentumIGT(Optimizer):
             gamma = (num_steps) / (num_steps + delta)
             transport = gamma / (1.0 - gamma)
 
-            if not transported:
+            if not transported and num_steps > 0:
                 for p in group['params']:
                     # Should compute the future transported params
                     param_state = self.state[p]
@@ -195,7 +207,6 @@ class MomentumIGT(Optimizer):
                         else:
                             p.data.add_(-lr * transport, momentum_velocity)
                 group['transported'] = True
-
 
     def eval(self):
         for group in self.param_groups:
