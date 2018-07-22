@@ -26,7 +26,8 @@ class MomentumIGT(Optimizer):
         * Write a hand-derived unit-test.
     """
 
-    def __init__(self, params, lr=required, momentum=0.0, dampening=0.0, weight_decay=0.0, nesterov=False, delta=1.0):
+    def __init__(self, params, lr=required, momentum=0.0, dampening=0.0,
+                 weight_decay=0.0, nesterov=False, delta=1.0):
         """
         Arguments:
         """
@@ -52,7 +53,9 @@ class MomentumIGT(Optimizer):
                 'transported': True,
         }
         if nesterov and (momentum <= 0 or dampening != 0):
-            raise ValueError("Nesterov momentum requires a momentum and zero dampening")
+            msg = "Nesterov momentum requires a momentum and zero dampening"
+            raise ValueError(msg)
+
         super(MomentumIGT, self).__init__(params, defaults)
 
 
@@ -92,7 +95,7 @@ class MomentumIGT(Optimizer):
                 if weight_decay != 0:
                     d_p.add_(weight_decay, p.data)
 
-                # Compute the IGT update
+                # Init buffers appropriately
                 if num_steps == 0:
 
                     if 'igt_velocity' not in param_state:
@@ -109,11 +112,8 @@ class MomentumIGT(Optimizer):
                     igt_velocity.add_(d_p)
                     if momentum != 0:
                         param_state['momentum_velocity'].add_(igt_velocity)
-                    true_params.add_(-lr, igt_velocity)
 
-                    # Set parameters to transported ones
-                    p.data.add_(-lr * (1.0 + future_transport), d_p) 
-
+                # Compute the IGT update
                 else:
                     igt_velocity = param_state['igt_velocity']
                     true_params = param_state['true_params']
@@ -122,33 +122,36 @@ class MomentumIGT(Optimizer):
                     igt_velocity.add(gamma, velocity)
                     igt_velocity.add((1.0 - gamma), d_p)
 
-                    # Apply momentum if necessary
-                    if momentum == 0:
-                        # Update true parameters
+                    # Compute momentum if necessary
+                    if momentum != 0:
+                        momentum_velocity = param_state['momentum_velocity']
+                        momentum_velocity.mul_(momentum).add_(1.0 - dampening,
+                                                              igt_velocity)
+
+                # Update true and transported parameters
+                if momentum == 0:
+                    # Update true parameters
+                    true_params.add_(-lr, igt_velocity)
+
+                    # Set parameters to transported ones
+                    p.data.copy_(true_params)
+                    p.data.add_(-lr * future_transport, igt_velocity)
+                else:
+                    if nesterov:
                         true_params.add_(-lr, igt_velocity)
+                        true_params.add_(-lr * momentum, momentum_velocity)
 
                         # Set parameters to transported ones
                         p.data.copy_(true_params)
                         p.data.add_(-lr * future_transport, igt_velocity)
+                        p.data.add_(-lr * momentum * future_transport,
+                                    momentum_velocity)
                     else:
-                        momentum_velocity = param_state['momentum_velocity']
-                        momentum_velocity.mul_(momentum).add_(1.0 - dampening,
-                                                              igt_velocity)
-                        if nesterov:
-                            true_params.add_(-lr, igt_velocity)
-                            true_params.add_(-lr * momentum, momentum_velocity)
+                        true_params.add_(-lr, momentum_velocity)
 
-                            # Set parameters to transported ones
-                            p.data.copy_(true_params)
-                            p.data.add_(-lr * future_transport, igt_velocity)
-                            p.data.add_(-lr * momentum * future_transport,
-                                        momentum_velocity)
-                        else:
-                            true_params.add_(-lr, momentum_velocity)
-
-                            # Set parameters to transported ones
-                            p.data.copy_(true_params)
-                            p.data.add_(-lr * future_transport, momentum_velocity)
+                        # Set parameters to transported ones
+                        p.data.copy_(true_params)
+                        p.data.add_(-lr * future_transport, momentum_velocity)
 
             group['num_steps'] = num_steps + 1
         return loss
