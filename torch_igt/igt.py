@@ -16,11 +16,11 @@ class MomentumIGT(Optimizer):
 
     Notes:
         
-        * This implementation requires 4 copies of the model's parameters.
-          I think it's possible to have a version with only 3 copies,
+        * This implementation requires 5 copies of the model's parameters.
+          (igt_velocity, momentum_velocity, true_params, gradients, params)
+          I think it's possible to have a version with only 4 copies,
           but it would sacrifice some clarity.
-        * Currently dampening is not supported.
-        * Heavyball and Nesterov are not implemented as in PyTorch's SGD.
+        * Heavyball and Nesterov are implemented as in PyTorch's SGD.
     """
 
     def __init__(self, params, lr=required, momentum=0.0, dampening=0.0, weight_decay=0.0, nesterov=False, delta=1.0):
@@ -127,19 +127,24 @@ class MomentumIGT(Optimizer):
 
                         # Set parameters to transported ones
                         p.data.copy_(true_params)
-                        p.data.add_(-lr * (1.0 + future_transport), igt_velocity)
+                        p.data.add_(-lr * future_transport, igt_velocity)
                     else:
                         momentum_velocity = param_state['momentum_velocity']
-                        if not nesterov:
-                            momentum_velocity.mul_(momentum).add_(lr, igt_velocity)
-                            true_params.add_(-1.0, momentum_velocity)
+                        momentum_velocity.mul_(momentum).add_(1.0 - dampening, igt_velocity)
+                        if nesterov:
+                            true_params.add_(-lr, igt_velocity)
+                            true_params.add_(-lr, momentum_velocity)
 
                             # Set parameters to transported ones
                             p.data.copy_(true_params)
-                            p.data.add_(-(1.0 + future_transport),
-                                        momentum_velocity)
+                            p.data.add_(-lr * future_transport, igt_velocity)
+                            p.data.add_(-lr * future_transport, momentum_velocity)
                         else:
-                            raise('Not implemented')
+                            true_params.add_(-lr, momentum_velocity)
+
+                            # Set parameters to transported ones
+                            p.data.copy_(true_params)
+                            p.data.add_(-lr * future_transport, momentum_velocity)
 
             group['num_steps'] = num_steps + 1
         return loss
