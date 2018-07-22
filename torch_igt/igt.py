@@ -21,6 +21,9 @@ class MomentumIGT(Optimizer):
           I think it's possible to have a version with only 4 copies,
           but it would sacrifice some clarity.
         * Heavyball and Nesterov are implemented as in PyTorch's SGD.
+
+    TODO:
+        * Write a hand-derived unit-test.
     """
 
     def __init__(self, params, lr=required, momentum=0.0, dampening=0.0, weight_decay=0.0, nesterov=False, delta=1.0):
@@ -46,6 +49,7 @@ class MomentumIGT(Optimizer):
                 'nesterov': nesterov,
                 'delta': delta,
                 'num_steps': 0,
+                'transported': True,
         }
         if nesterov and (momentum <= 0 or dampening != 0):
             raise ValueError("Nesterov momentum requires a momentum and zero dampening")
@@ -73,8 +77,6 @@ class MomentumIGT(Optimizer):
             delta = group['delta']
             num_steps = group['num_steps']
 
-            # gamma = num_steps / (num_steps + delta)
-            # transport = gamma / (1.0 - gamma)
             future_gamma = (num_steps + 1) / (num_steps + 1 + delta)
             future_transport = future_gamma / (1.0 - gamma)
 
@@ -106,7 +108,7 @@ class MomentumIGT(Optimizer):
                     # Compute first step and initial values
                     igt_velocity.add_(d_p)
                     if momentum != 0:
-                        param_state['momentum_velocity'].add_(-lr, igt_velocity)
+                        param_state['momentum_velocity'].add_(igt_velocity)
                     true_params.add_(-lr, igt_velocity)
 
                     # Set parameters to transported ones
@@ -130,15 +132,17 @@ class MomentumIGT(Optimizer):
                         p.data.add_(-lr * future_transport, igt_velocity)
                     else:
                         momentum_velocity = param_state['momentum_velocity']
-                        momentum_velocity.mul_(momentum).add_(1.0 - dampening, igt_velocity)
+                        momentum_velocity.mul_(momentum).add_(1.0 - dampening,
+                                                              igt_velocity)
                         if nesterov:
                             true_params.add_(-lr, igt_velocity)
-                            true_params.add_(-lr, momentum_velocity)
+                            true_params.add_(-lr * momentum, momentum_velocity)
 
                             # Set parameters to transported ones
                             p.data.copy_(true_params)
                             p.data.add_(-lr * future_transport, igt_velocity)
-                            p.data.add_(-lr * future_transport, momentum_velocity)
+                            p.data.add_(-lr * momentum * future_transport,
+                                        momentum_velocity)
                         else:
                             true_params.add_(-lr, momentum_velocity)
 
@@ -152,13 +156,46 @@ class MomentumIGT(Optimizer):
 
     def train(self):
         """
-        Set the parameters of the model to the transported ones. (for gradient computation)
+        Swaps true and transported parameters.
+
+        Useful for switching from inference to training.
         """
-        pass
+        for group in self.param_groups:
+            lr = group['lr']
+            momentum = group['momentum']
+            dampening = group['dampening']
+            weight_decay = group['weight_decay']
+            nesterov = group['nesterov']
+            delta = group['delta']
+            num_steps = group['num_steps']
+            transported = group['transported']
+
+            future_gamma = (num_steps + 1) / (num_steps + 1 + delta)
+            future_transport = future_gamma / (1.0 - gamma)
+
+            if not transported:
+                for p in group['params']:
+                    # Should compute the future transported params
+                    param_state = self.state[p]
+                    igt_velocity = param_state['igt_velocity']
+                    p.data.copy_(true_params)
+                    if momentum == 0:
+                        p.data.add_(-lr * future_transport, igt_velocity)
+                    else:
+                        momentum_velocity = param_state['momentum_velocity']
+                        if nesterov:
+                            p.data.add_(-lr * future_transport, igt_velocity)
+                            p.data.add_(-lr * momentum * future_transport,
+                                        momentum_velocity)
+                        else:
+                            p.data.add_(-lr * future_transport, momentum_velocity)
+                group['transported'] = True
 
 
     def eval(self):
-        """
-        Set the parameters of the model to the best ones. (for evaluation)
-        """
-        pass
+        for group in self.param_groups:
+            if group['transported']:
+                for p in group['params']:
+                    # Copy true_params to the params
+                    p.data.copy_(self.state[p]['true_params'])
+                group['transported'] = False
