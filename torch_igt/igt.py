@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import torch as th
-from torch.optim.Optimizer import Optimizer, required
+from torch.optim.optimizer import Optimizer, required
 
 
 class MomentumIGT(Optimizer):
