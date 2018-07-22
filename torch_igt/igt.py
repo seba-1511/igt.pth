@@ -80,8 +80,9 @@ class MomentumIGT(Optimizer):
             delta = group['delta']
             num_steps = group['num_steps']
 
+            gamma = num_steps / (num_steps + delta)
             future_gamma = (num_steps + 1) / (num_steps + 1 + delta)
-            future_transport = future_gamma / (1.0 - gamma)
+            future_transport = future_gamma / (1.0 - future_gamma)
 
             for p in group['params']:
 
@@ -101,7 +102,7 @@ class MomentumIGT(Optimizer):
                     if 'igt_velocity' not in param_state:
                         param_state['igt_velocity'] = th.zeros_like(p.data)
                     if 'true_params' not in param_state:
-                        param_state['true_params'] = th.clone(p.data)
+                        param_state['true_params'] = p.data.clone()
                     if momentum != 0 and 'momentum_velocity' not in param_state:
                         param_state['momentum_velocity'] = th.zeros_like(p.data)
 
@@ -119,8 +120,7 @@ class MomentumIGT(Optimizer):
                     true_params = param_state['true_params']
 
                     # Update IGT's velocity
-                    igt_velocity.add(gamma, velocity)
-                    igt_velocity.add((1.0 - gamma), d_p)
+                    igt_velocity.mul_(gamma).add_((1.0 - gamma), d_p)
 
                     # Compute momentum if necessary
                     if momentum != 0:
@@ -137,6 +137,7 @@ class MomentumIGT(Optimizer):
                     p.data.copy_(true_params)
                     p.data.add_(-lr * future_transport, igt_velocity)
                 else:
+                    momentum_velocity = param_state['momentum_velocity']
                     if nesterov:
                         true_params.add_(-lr, igt_velocity)
                         true_params.add_(-lr * momentum, momentum_velocity)
@@ -173,25 +174,26 @@ class MomentumIGT(Optimizer):
             num_steps = group['num_steps']
             transported = group['transported']
 
-            future_gamma = (num_steps + 1) / (num_steps + 1 + delta)
-            future_transport = future_gamma / (1.0 - gamma)
+            gamma = (num_steps) / (num_steps + delta)
+            transport = gamma / (1.0 - gamma)
 
             if not transported:
                 for p in group['params']:
                     # Should compute the future transported params
                     param_state = self.state[p]
                     igt_velocity = param_state['igt_velocity']
+                    true_params = param_state['true_params']
                     p.data.copy_(true_params)
                     if momentum == 0:
-                        p.data.add_(-lr * future_transport, igt_velocity)
+                        p.data.add_(-lr * transport, igt_velocity)
                     else:
                         momentum_velocity = param_state['momentum_velocity']
                         if nesterov:
-                            p.data.add_(-lr * future_transport, igt_velocity)
-                            p.data.add_(-lr * momentum * future_transport,
+                            p.data.add_(-lr * transport, igt_velocity)
+                            p.data.add_(-lr * momentum * transport,
                                         momentum_velocity)
                         else:
-                            p.data.add_(-lr * future_transport, momentum_velocity)
+                            p.data.add_(-lr * transport, momentum_velocity)
                 group['transported'] = True
 
 
