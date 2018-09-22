@@ -2,7 +2,7 @@
 .PHONY: all
 
 all:
-	python tests/example.py
+	python tests/test_igt_wrapper.py
 
 test:
 	python tests/test_igt.py

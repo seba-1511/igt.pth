@@ -45,9 +45,7 @@ class MomentumIGT(Optimizer):
 
     def __init__(self, params, lr=required, momentum=0.0, dampening=0.0,
                  weight_decay=0.0, nesterov=False, delta=1.0):
-        """
-        Arguments:
-        """
+
         if weight_decay < 0.0:
             msg = "Invalid weight_decay value: {}".format(weight_decay)
             raise ValueError(msg)
@@ -55,8 +53,6 @@ class MomentumIGT(Optimizer):
         if delta <= 0.0:
             raise ValueError("Invalid delta value: {}".format(delta))
 
-        defaults = dict(lr=lr, momentum=momentum, dampening=dampening,
-                        weight_decay=weight_decay, nesterov=nesterov)
         defaults = {
                 'lr': lr,
                 'momentum': momentum,
