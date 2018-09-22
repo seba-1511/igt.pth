@@ -20,10 +20,7 @@ class IGTransporter(Optimizer):
             delta = group['delta']
             num_steps = group['num_steps']
             gamma = (num_steps) / (num_steps + delta)
-            future_gamma = (num_steps + 1) / (num_steps + 1 + delta)
-            future_transport = future_gamma / (1.0 - future_gamma)
             for p in group['params']:
-
                 d_p = p.grad.data
                 param_state = self.state[p]
 
@@ -40,9 +37,20 @@ class IGTransporter(Optimizer):
                     # Sets gradients to the IGT estimate
                     d_p.copy_(igt_estimate)
                     p.data.copy_(true_p)  # Revert to true params
-                loss = self.opt.step(closure)
+
+        # Take the step according to opt
+        loss = self.opt.step(closure)
+
+        # Transport to the next parameter point
+        for group in self.param_groups:
+            delta = group['delta']
+            num_steps = group['num_steps']
+            future_gamma = (num_steps + 1) / (num_steps + 1 + delta)
+            future_transport = future_gamma / (1.0 - future_gamma)
+            for p in group['params']:
+                d_p = p.grad.data
+                true_p = self.state[p]['true_p']
                 temp_p = p.data.clone()
-                # Transport to the next parameter point
                 p.data.add_(future_transport * (p.data - true_p))
                 true_p.copy_(temp_p)
             group['num_steps'] += 1
