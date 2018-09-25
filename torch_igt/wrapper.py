@@ -43,8 +43,6 @@ class IGTransporter(Optimizer):
                     d_p.copy_(igt_estimate)
                     p.data.copy_(true_p)  # Revert to true params
 
-#                p.data.mul_(0)
-
         # Take the step according to opt
         loss = self.opt.step(closure)
 
@@ -66,12 +64,6 @@ class IGTransporter(Optimizer):
                 Subtraction is numerically unstable and hence the observed
                 differences in algorithms.
                 """
-                #true_p = self.state[p]['true_p']
-                #temp_p = true_p.clone()
-                #temp_p.add_(p.data)
-                #p.data.mul_(1.0 + future_transport).add_(true_p)
-                #true_p.copy_(temp_p)
-
                 p.data.add_(future_transport, vector_change)
                 true_p.copy_(temp_p)
             group['num_steps'] += 1
