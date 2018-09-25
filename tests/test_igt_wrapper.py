@@ -17,6 +17,10 @@ class Vector(nn.Module):
         return self.vector
 
 
+def dist(x, y):
+    return (x - y).pow(2).sum()
+
+
 def close(x, y):
     return (x - y).pow(2).sum() < 1e-8
 
