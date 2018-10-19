@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
 
+import math
 import torch as th
 from torch.optim.optimizer import Optimizer, required
 
 
 class IGTransporter(Optimizer):
+
+    """
+    In this implementation, the following variables are defined as
+
+    * igt_estimate: the IGT buffers that get updated with every new
+      stochastic gradient.
+    * true_p: keeps track of the unshifted parameters when training,
+      and the model parameters are set at the shifted position. Conversely,
+      when calling `eval()` the parameters of the model are set to the
+      unshifted values, and true_p becomes the shifted ones. You can switch
+      back using `train()`.
+    """
 
     def __init__(self, params=required, opt=required, delta=1.0):
         self.opt = opt
@@ -57,12 +70,14 @@ class IGTransporter(Optimizer):
                 temp_p = p.data.clone()
                 vector_change = p.data.add(-1.0, true_p)
                 """
-                TODO: The numerical problem is here.
+                NOTE: The numerical problem is here.
                 Essentially, computing vector change involves a subtraction,
                 while computing the update with opt.step() is a multiplication.
 
                 Subtraction is numerically unstable and hence the observed
                 differences in algorithms.
+                Note: this mainly depends on the computation. If it is stable,
+                then using the parameter difference doesn't greatly divergence.
                 """
                 p.data.add_(future_transport, vector_change)
                 true_p.copy_(temp_p)
@@ -90,3 +105,37 @@ class IGTransporter(Optimizer):
                     p.data.copy_(true_p)
                     true_p.copy_(temp_p)
                 group['train'] = False
+
+
+class ExpIGT(IGTransporter):
+
+    def __init__(self, params=required, opt=required, delta=1.0):
+        self.opt = opt
+        defaults = {
+            'delta': delta,
+            'num_steps': 0,
+            'train': True,
+            'num_resets': 0,
+            'exp_power': 2,
+        }
+        super(IGTransporter, self).__init__(params, defaults)
+
+    def step(self, closure=None):
+        for group in self.param_groups:
+            assert group['train'], 'Called step not in train mode.'
+
+            num_steps = group['num_steps']
+            num_resets = group['num_resets']
+            exp_power = group['exp_power']
+            if exp_power**num_resets == num_steps:
+                group['num_resets'] = num_resets + 1
+                group['num_steps'] = 0
+                # Then we perform a reset
+                for p in group['params']:
+                    param_state = self.state[p]
+                    # First, move the true params to shifted ones
+                    true_p = param_state['true_p']
+                    true_p.copy_(p.data)
+                    # Second, zero-out the IGT buffers
+                    param_state['igt_estimate'].mul_(0)
+        return super(ExpIGT, self).step(closure)
