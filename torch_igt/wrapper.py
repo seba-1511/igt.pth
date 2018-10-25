@@ -76,8 +76,9 @@ class IGTransporter(Optimizer):
 
                 Subtraction is numerically unstable and hence the observed
                 differences in algorithms.
-                Note: this mainly depends on the computation. If it is stable,
-                then using the parameter difference doesn't greatly divergence.
+                Note: this mainly depends on the loss computation. If it is
+                stable, then using the parameter difference doesn't greatly
+                diverge.
                 """
                 p.data.add_(future_transport, vector_change)
                 true_p.copy_(temp_p)
@@ -121,6 +122,7 @@ class ExpIGT(IGTransporter):
         super(IGTransporter, self).__init__(params, defaults)
 
     def step(self, closure=None):
+        result = super(ExpIGT, self).step(closure)
         for group in self.param_groups:
             assert group['train'], 'Called step not in train mode.'
 
@@ -138,4 +140,55 @@ class ExpIGT(IGTransporter):
                     true_p.copy_(p.data)
                     # Second, zero-out the IGT buffers
                     param_state['igt_estimate'].mul_(0)
-        return super(ExpIGT, self).step(closure)
+        return result
+
+
+class Exp(Optimizer):
+
+    def __init__(self, params=required, opt=required, delta=1):
+        self.opt = opt
+        defaults = {
+            'delta': delta,
+            'num_steps': 0,
+            'num_resets': 0,
+            'exp_power': 2,
+        }
+        super(Exp, self).__init__(params, defaults)
+
+    def step(self, closure=None):
+        # Replace each gradient with exponential average
+        for group in self.param_groups:
+            num_steps = group['num_steps']
+            num_resets = group['num_resets']
+            exp_power = group['exp_power']
+            delta = group['delta']
+            gamma = (num_steps) / (num_steps + delta)
+            for p in group['params']:
+                param_state = self.state[p]
+                if 'exp_average' not in param_state:
+                    # Init with stochastic gradient
+                    param_state['exp_average'] = p.grad.data.clone()
+                else:
+                    # Compute new exponential average
+                    p.grad.data.mul_(1.0 - gamma).add_(gamma,
+                                                       param_state['exp_average'])
+                    param_state['exp_average'].copy_(p.grad.data)
+            group['num_steps'] += 1
+
+        # Take optimization step
+        result = self.opt.step(closure)
+
+        # Reset buffers if necessary
+        for group in self.param_groups:
+            num_steps = group['num_steps']
+            num_resets = group['num_resets']
+            exp_power = group['exp_power']
+            if exp_power**num_resets == num_steps:
+                group['num_resets'] = num_resets + 1
+                group['num_steps'] = 0
+                # Then we perform a reset
+                for p in group['params']:
+                    param_state = self.state[p]
+                    # Second, zero-out the averaging buffers
+                    param_state['exp_average'].mul_(0)
+        return result

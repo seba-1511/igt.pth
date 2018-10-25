@@ -2,4 +2,4 @@
 
 from .igt import MomentumIGT
 from .adam_igt import AdamIGT
-from .wrapper import IGTransporter, ExpIGT
+from .wrapper import IGTransporter, ExpIGT, Exp
