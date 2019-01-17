@@ -143,6 +143,85 @@ class ExpIGT(IGTransporter):
         return result
 
 
+class SoftExpIGT(ExpIGT):
+
+    def step(self, closure=None):
+        result = super(ExpIGT, self).step(closure)
+        for group in self.param_groups:
+            assert group['train'], 'Called step not in train mode.'
+
+            num_steps = group['num_steps']
+            num_resets = group['num_resets']
+            exp_power = group['exp_power']
+            if exp_power**num_resets == num_steps:
+                group['num_resets'] = num_resets + 1
+                group['num_steps'] = 1
+                # Then we perform a reset
+                for p in group['params']:
+                    param_state = self.state[p]
+                    # Only, move the true params to shifted ones
+                    true_p = param_state['true_p']
+                    true_p.copy_(p.data)
+        return result
+
+
+class SoftResetExpIGT(ExpIGT):
+
+    def step(self, closure=None):
+        result = super(ExpIGT, self).step(closure)
+        for group in self.param_groups:
+            assert group['train'], 'Called step not in train mode.'
+
+            num_steps = group['num_steps']
+            num_resets = group['num_resets']
+            exp_power = group['exp_power']
+            if exp_power**num_resets == num_steps:
+                group['num_resets'] = num_resets + 1
+                group['num_steps'] = group['num_resets']
+                # Then we perform a reset
+                for p in group['params']:
+                    param_state = self.state[p]
+                    # Only, move the true params to shifted ones
+                    true_p = param_state['true_p']
+                    true_p.copy_(p.data)
+        return result
+
+
+class ExpIGTCont(IGTransporter):
+
+    def __init__(self, params=required, opt=required, delta=1.0):
+        self.opt = opt
+        defaults = {
+            'delta': delta,
+            'num_steps': 0,
+            'train': True,
+            'num_resets': 0,
+            'exp_power': 2,
+        }
+        super(IGTransporter, self).__init__(params, defaults)
+
+    def step(self, closure=None):
+        result = super(ExpIGTCont, self).step(closure)
+        for group in self.param_groups:
+            assert group['train'], 'Called step not in train mode.'
+
+            num_steps = group['num_steps']
+            num_resets = group['num_resets']
+            exp_power = group['exp_power']
+            if exp_power**num_resets == num_steps:
+                group['num_resets'] = num_resets + 1
+                group['num_steps'] = 0
+                # Then we perform a reset
+                for p in group['params']:
+                    param_state = self.state[p]
+                    # First, move the shifted params to true ones
+                    true_p = param_state['true_p']
+                    p.data.copy_(true_p)
+                    # Second, zero-out the IGT buffers
+                    param_state['igt_estimate'].mul_(0)
+        return result
+
+
 class Exp(Optimizer):
 
     def __init__(self, params=required, opt=required, delta=1):
