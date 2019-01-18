@@ -46,7 +46,7 @@ class NCIGT(IGTransporter, Optimizer):
                     theta_hat_1 = param_state['theta_hat_1']
                     theta_hat_2 = param_state['theta_hat_2']
                     N_t = param_state['N_t']
-                    g_hat_1.mul_((N_t-1)/N_t).add_(1/N_t, d_p)
+                    g_hat_1.mul_((N_t-1)/N_t).add_(1.0/N_t, d_p)
                     d_p.mul_(0).add_(g_hat_2).add_(2*N_t/t, g_hat_1 - g_hat_2)
 
                     # Perform a reset
