@@ -9,17 +9,19 @@ from torch_igt.wrapper import IGTransporter
 class NCIGT(IGTransporter, Optimizer):
     """ Implementation of Non-Convex IGT. """
 
-    def __init__(self, params=required, opt=required):
+    def __init__(self, params=required, opt=required, interval=2.0):
         self.opt = opt
         defaults = {
             'num_steps': 1,
             'train': True,
+            'interval': interval,
         }
         super(IGTransporter, self).__init__(params, defaults)
 
     def step(self, closure=None):
         for group in self.param_groups:
             t = group['num_steps']
+            c = group['interval']
             for p in group['params']:
 
                 if p.grad is None:
@@ -47,10 +49,10 @@ class NCIGT(IGTransporter, Optimizer):
                     theta_hat_2 = param_state['theta_hat_2']
                     N_t = param_state['N_t']
                     g_hat_1.mul_((N_t-1)/N_t).add_(1.0/N_t, d_p)
-                    d_p.mul_(0).add_(g_hat_2).add_(2*N_t/t, g_hat_1 - g_hat_2)
+                    d_p.mul_(0).add_(g_hat_2).add_(c*N_t/t, g_hat_1 - g_hat_2)
 
                     # Perform a reset
-                    if N_t >= t / 2.0:
+                    if N_t >= t / c:
                         g_hat_2.copy_(g_hat_1)
                         theta_hat_2.copy_(theta_hat_1)
                         g_hat_1.mul_(0)
@@ -86,7 +88,7 @@ class NCIGT(IGTransporter, Optimizer):
                 theta_tilde.mul_(0).add_(-(N_t - 1), theta_hat_1)
                 theta_hat_1.mul_(0)
                 theta_hat_1.add_(1/N_t,
-                                 t/2.0 * true_p - (t/2.0 - N_t) * theta_hat_2)
+                                 t/c * true_p - (t/c - N_t) * theta_hat_2)
                 theta_tilde.add_(N_t, theta_hat_1)
 
         return result
