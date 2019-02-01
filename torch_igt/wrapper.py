@@ -23,7 +23,7 @@ class IGTransporter(Optimizer):
         self.opt = opt
         defaults = {
             'delta': delta,
-            'interval': interval,
+            'interval': 1.0 / interval,
             'num_steps': 0,
             'train': True,
         }
