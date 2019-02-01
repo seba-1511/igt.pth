@@ -19,10 +19,11 @@ class IGTransporter(Optimizer):
       back using `train()`.
     """
 
-    def __init__(self, params=required, opt=required, delta=1.0):
+    def __init__(self, params=required, opt=required, delta=1.0, interval=1.0):
         self.opt = opt
         defaults = {
             'delta': delta,
+            'interval': interval,
             'num_steps': 0,
             'train': True,
         }
@@ -32,7 +33,9 @@ class IGTransporter(Optimizer):
         for group in self.param_groups:
             delta = group['delta']
             num_steps = group['num_steps']
+            interval = group['interval']
             gamma = (num_steps) / (num_steps + delta)
+            gamma = gamma**(2.0 / interval - 1.0)
             for p in group['params']:
 
                 if p.grad is None:
