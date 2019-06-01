@@ -67,6 +67,7 @@ class NCIGT(IGTransporter, Optimizer):
         for group in self.param_groups:
             group['num_steps'] += 1
             t = group['num_steps']
+            c = group['interval']
             for p in group['params']:
 
                 if p.grad is None:

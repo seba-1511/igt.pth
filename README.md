@@ -32,4 +32,4 @@ loss = L(model(X_test), y_test)
 
 # Note to Reviewers
 
-The ATA family of algorithms (such as `Heavyball-ATA` in the paper) are implemented as `torch_igt.NCIGT(params, opt)`.
+The ITA family of algorithms (such as `Heavyball-ITA` in the paper) are implemented as `torch_igt.ITA(params, opt)`.
