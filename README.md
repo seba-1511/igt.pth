@@ -1,5 +1,4 @@
-# igt.pth
-Implicit Gradient Transport in PyTorch
+# Implicit Gradient Transport in PyTorch
 
 # Installation
 
@@ -30,6 +29,6 @@ opt.eval()
 loss = L(model(X_test), y_test)
 ```
 
-# Note to Reviewers
+# Note
 
 The ITA family of algorithms (such as `Heavyball-ITA` in the paper) are implemented as `torch_igt.ITA(params, opt)`.
